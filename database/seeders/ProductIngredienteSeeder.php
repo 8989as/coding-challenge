@@ -35,10 +35,50 @@ class ProductIngredienteSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-            // Other product-ingredient relationships
+            [
+                'product_id' => 2,
+                'ingredient_id' => 1,
+                'amount' => 150,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'product_id' => 2,
+                'ingredient_id' => 2,
+                'amount' => 30,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'product_id' => 2,
+                'ingredient_id' => 3,
+                'amount' => 20,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'product_id' => 3,
+                'ingredient_id' => 1,
+                'amount' => 150,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'product_id' => 3,
+                'ingredient_id' => 2,
+                'amount' => 30,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'product_id' => 3,
+                'ingredient_id' => 3,
+                'amount' => 20,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
         ];
 
-        // Insert data into the ingredient_product table
-        DB::table('product_ingredient')->insert($ingredientProduct);
+        DB::table('ingredient_product')->insert($ingredientProduct);
     }
 }

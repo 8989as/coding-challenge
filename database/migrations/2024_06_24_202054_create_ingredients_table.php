@@ -16,6 +16,8 @@ return new class extends Migration
             $table->string('name');
             $table->integer('stock');
             $table->string('unit');
+            $table->integer('reOrder_point');
+            $table->boolean('email_sent')->default(false);
             $table->timestamps();
         });
     }

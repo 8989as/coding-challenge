@@ -9,8 +9,15 @@ class Ingredient extends Model
 {
     use HasFactory;
 
+    protected $fillable = [
+        'name',
+        'stock',
+        'reOrder_point',
+        'email_sent',
+    ];
+
     public function products()
     {
-        return $this->belongsToMany(Product::class);
+        return $this->belongsToMany(Product::class)->withPivot('amount');
     }
 }
