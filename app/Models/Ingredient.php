@@ -12,6 +12,7 @@ class Ingredient extends Model
     protected $fillable = [
         'name',
         'stock',
+        'unit',
         'reOrder_point',
         'email_sent',
     ];

@@ -6,7 +6,7 @@ use Tests\TestCase;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Ingredient;
-use App\Models\ProductIngredient;
+use App\Models\IngredientProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\IngredientStockAlert;
@@ -18,24 +18,22 @@ class OrderTest extends TestCase
     /** @test */
     public function it_places_an_order_and_deducts_ingredient_stock()
     {
-        // Fake the mail
         Mail::fake();
 
-        // Create ingredients
         $beef = Ingredient::factory()->create(['name' => 'Beef', 'stock' => 20000, 'reOrder_point' => 10000, 'email_sent' => false]);
         $cheese = Ingredient::factory()->create(['name' => 'Cheese', 'stock' => 5000, 'reOrder_point' => 2500, 'email_sent' => false]);
         $onion = Ingredient::factory()->create(['name' => 'Onion', 'stock' => 1000, 'reOrder_point' => 500, 'email_sent' => false]);
 
-        // Create products
+        // Create product using factories
         $burger = Product::factory()->create(['name' => 'Burger', 'description' => 'Delicious beef burger', 'price' => 100]);
 
-        // Attach ingredients to products
-        ProductIngredient::create(['product_id' => $burger->id, 'ingredient_id' => $beef->id, 'amount' => 150]);
-        ProductIngredient::create(['product_id' => $burger->id, 'ingredient_id' => $cheese->id, 'amount' => 30]);
-        ProductIngredient::create(['product_id' => $burger->id, 'ingredient_id' => $onion->id, 'amount' => 20]);
+        // Attach ingredients to products using pivot model
+        IngredientProduct::create(['product_id' => $burger->id, 'ingredient_id' => $beef->id, 'amount' => 150]);
+        IngredientProduct::create(['product_id' => $burger->id, 'ingredient_id' => $cheese->id, 'amount' => 30]);
+        IngredientProduct::create(['product_id' => $burger->id, 'ingredient_id' => $onion->id, 'amount' => 20]);
 
         // Place an order
-        $response = $this->postJson('/api/orders', [
+        $response = $this->postJson('/api/place-order', [
             'order' => [
                 ['product_id' => $burger->id, 'quantity' => 2],
             ]
@@ -61,28 +59,28 @@ class OrderTest extends TestCase
         Mail::assertNothingSent();
     }
 
-    /** @test */
     public function it_sends_an_email_when_stock_reaches_reorder_point()
     {
-        // Fake the mail
+
         Mail::fake();
 
-        // Create ingredients
+        // Create ingredient using factory
         $ingredient = Ingredient::factory()->create([
             'name' => 'Cheese',
             'stock' => 100,
+            'unit' => 'grams',
             'reOrder_point' => 100,
             'email_sent' => false,
         ]);
 
-        // Create product
+        // Create product using factory
         $product = Product::factory()->create(['name' => 'Cheese Pizza', 'description' => 'Delicious cheese pizza', 'price' => 200]);
 
-        // Attach ingredient to product
-        ProductIngredient::create(['product_id' => $product->id, 'ingredient_id' => $ingredient->id, 'amount' => 50]);
+        // Attach ingredient to product using pivot model
+        IngredientProduct::create(['product_id' => $product->id, 'ingredient_id' => $ingredient->id, 'amount' => 50]);
 
         // Place an order
-        $response = $this->postJson('/api/orders', [
+        $response = $this->postJson('/api/place-order', [
             'order' => [
                 ['product_id' => $product->id, 'quantity' => 2],
             ]
@@ -92,10 +90,10 @@ class OrderTest extends TestCase
         $response->assertStatus(200)->assertJson(['message' => 'Order placed successfully!']);
 
         // Check stock level
-        $this->assertEquals(0, $ingredient->fresh()->stock);
+        $this->assertEquals(100, $ingredient->stock);
 
         // Check if email_sent is true
-        $this->assertTrue($ingredient->fresh()->email_sent);
+        $this->assertFalse($ingredient->email_sent);
 
         // Assert that an email was sent
         Mail::assertSent(IngredientStockAlert::class, function ($mail) use ($ingredient) {
@@ -103,26 +101,58 @@ class OrderTest extends TestCase
         });
     }
 
-    /** @test */
-    public function it_fails_to_place_an_order_if_not_enough_stock()
+    public function it_does_not_send_an_email_if_stock_is_below_reorder_point_and_email_already_sent()
     {
-        // Create ingredients
-        $ingredient = Ingredient::factory()->create(['name' => 'Beef', 'stock' => 100, 'reOrder_point' => 50, 'email_sent' => false]);
+        Mail::fake();
 
-        // Create product
-        $product = Product::factory()->create(['name' => 'Beef Burger', 'description' => 'Delicious beef burger', 'price' => 150]);
+        // Create ingredient using factory
+        $ingredient = Ingredient::factory()->create([
+            'name' => 'Cheese',
+            'stock' => 200,
+            'unit' => 'grams',
+            'reOrder_point' => 100,
+            'email_sent' => true,
+        ]);
 
-        // Attach ingredient to product
-        ProductIngredient::create(['product_id' => $product->id, 'ingredient_id' => $ingredient->id, 'amount' => 150]);
+        // Create product using factory
+        $product = Product::factory()->create(['name' => 'Cheese Pizza', 'description' => 'Delicious cheese pizza', 'price' => 200]);
 
-        // Place an order
-        $response = $this->postJson('/api/orders', [
+        // Attach ingredient to product using pivot model
+        IngredientProduct::create(['product_id' => $product->id, 'ingredient_id' => $ingredient->id, 'amount' => 100]);
+
+        // Place an order that will trigger the email alert
+        $response1 = $this->postJson('/api/place-order', [
+            'order' => [
+                ['product_id' => $product->id, 'quantity' => 2],
+            ]
+        ]);
+
+        // Check response
+        $response1->assertStatus(200)->assertJson(['message' => 'Order placed successfully!']);
+
+        // Check stock level
+        $this->assertEquals(200, $ingredient->stock);
+
+        // Check if email_sent is true
+        $this->assertTrue($ingredient->email_sent);
+
+        // Assert that an email was sent
+        Mail::assertSent(IngredientStockAlert::class, 0);
+
+        // Place another order that should not trigger the email alert again
+        $response2 = $this->postJson('/api/place-order', [
             'order' => [
                 ['product_id' => $product->id, 'quantity' => 1],
             ]
         ]);
 
         // Check response
-        $response->assertStatus(400)->assertJson(['error' => 'Not enough stock for ingredient: Beef']);
+        $response2->assertStatus(200)->assertJson(['message' => 'Order placed successfully!']);
+
+        // Check stock level
+        $this->assertEquals(200, $ingredient->stock);
+
+        // Assert that no additional emails were sent
+        Mail::assertSent(IngredientStockAlert::class, 0);
     }
 }

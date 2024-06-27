@@ -10,77 +10,40 @@ use Illuminate\Support\Facades\Mail;
 
 class OrderController extends Controller
 {
-    // public function placeOrder(Request $request)
-    // {
-    //     try {
-    //         $order = $request->input('order');
-
-    //     foreach ($order as $orderItem) {
-    //         $product = Product::with('ingredients')->find($orderItem['product_id']);
-
-    //         foreach ($product->ingredients as $ingredient) {
-    //             $requiredAmount = $ingredient->pivot->amount * $orderItem['quantity'];
-    //             $ingredient->stock -= $requiredAmount;
-
-    //             // Check if the stock has reached the re-order point and email has not been sent
-    //             if ($ingredient->stock <= $ingredient->reOrder_point && !$ingredient->email_sent) {
-
-    //                 // Send alert email assueming that the email is coming from our customers database
-    //                 Mail::to('asaeeed@outlook.com')->send(new IngredientStockAlert($ingredient));
-
-    //                 $ingredient->email_sent = true;
-    //             }
-
-    //             $ingredient->save();
-    //         }
-    //     }
-    //         return response()->json([
-    //             'message' => 'Order placed successfully!',
-    //             'data' => $product,
-    //             'error' => null
-    //         ], 200);
-    //     } catch (\Exception $e) {
-    //         return response()->json([
-    //             'message' => 'Something went wrong!',
-    //             'data' => null,
-    //             'error' => $e->getMessage()
-    //         ], 500);
-    //     }
-    // }
-
     public function placeOrder(Request $request)
     {
         try {
-            $orderData = $request->input('order');
+            $order = $request->input('order');
+            $orderData = [];
 
-            // Create an order
-            $order = Order::create();
-
-            foreach ($orderData as $orderItem) {
+            foreach ($order as $orderItem) {
                 $product = Product::with('ingredients')->find($orderItem['product_id']);
 
                 foreach ($product->ingredients as $ingredient) {
                     $requiredAmount = $ingredient->pivot->amount * $orderItem['quantity'];
                     $ingredient->stock -= $requiredAmount;
 
-                    // Check if the stock has reached the re-order point and email has not been sent
+                    // Check if stock is below reorder point and email has not been sent
                     if ($ingredient->stock <= $ingredient->reOrder_point && !$ingredient->email_sent) {
-                        // Send alert email
                         Mail::to('asaeeed@outlook.com')->send(new IngredientStockAlert($ingredient));
-
                         $ingredient->email_sent = true;
                     }
 
                     $ingredient->save();
                 }
+                $orderData[$product->id] = ['quantity' => $orderItem['quantity']];
+            }
 
-                // Attach product to order with quantity
-                $order->products()->attach($orderItem['product_id'], ['quantity' => $orderItem['quantity']]);
+            // Create a new order
+            $newOrder = Order::create();
+
+            foreach ($orderData as $productId => $data) {
+                $newOrder->products()->attach($productId, ['quantity' => $data['quantity']]);
             }
 
             return response()->json([
                 'message' => 'Order placed successfully!',
-                'data' => $order,
+                'data' => $newOrder,
                 'error' => null
             ], 200);
         } catch (\Exception $e) {
